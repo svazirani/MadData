@@ -1,0 +1,168 @@
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# Load necessary library
+library(dplyr)
+library(lubridate)
+library(tidyr) 
+
+# Read the CSV file
+df <- read.csv("Crimes_-_2001_to_Present_20250222.csv", stringsAsFactors = FALSE)
+
+# Select relevant columns
+df <- df %>%
+  select(Date, Primary.Type, Description, Location.Description,District, 
+          Year,Longitude,Latitude)
+
+# Convert Date to proper format and filter records after 2020
+df$Date <- mdy_hms(df$Date)  # Convert to datetime
+df <- df %>% filter(Year >= 2023)
+
+# Remove rows with missing critical values
+df <- df %>% drop_na(Primary.Type, Location.Description)
+
+# Remove duplicate rows
+df <- df %>% distinct()
+
+# Save cleaned data to a new CSV file
+write.csv(df, "cleaned_crime_data.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+head(df)
+
+```
+```{r}
+
+# Define the list of crime types to remove
+remove_crimes <- c("NARCOTICS", "CRIMINAL TRESPASS", "LIQUOR LAW VIOLATION", 
+                   "OTHER NARCOTIC VIOLATION", "GAMBLING", 
+                   "INTERFERENCE WITH PUBLIC OFFICER", "PROSTITUTION", 
+                   "NON-CRIMINAL", "OTHER OFFENSE","CONCEALED CARRY LICENSE VIOLATION","CRIMINAL DAMAGE","DECEPTIVE PRACTICE","WEAPONS VIOLATION", "MOTOR VEHICLE THEFT", "BURGLARY" ,"OFFENSE INVOLVING CHILDREN", "ARSON","PUBLIC PEACE VIOLATION", "PUBLIC INDECENCY", "HUMAN TRAFFICKING")
+
+# Filter out these crime types
+df <- df %>% filter(!Primary.Type %in% remove_crimes)
+
+# Save the updated dataset
+write.csv(df, "cleaned_crime_data.csv", row.names = FALSE)
+
+cat("Specified crime types removed, and dataset updated!\n")
+
+```
+```{r}
+
+unique(df$Location.Description)
+```
+```{r}
+head(df)
+```
+
+```{r}
+library(ggplot2)
+
+df %>%
+  count(District, sort = TRUE) %>%
+  top_n(10, n) %>%  # Select top 10 districts with highest crime occurrences
+  ggplot(aes(x = reorder(as.factor(District), n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 10 Districts with Highest Crime Reports", x = "District", y = "Crime Count") +
+  theme_minimal()
+
+```
+
+```{r}
+df %>%
+  filter(Primary.Type == "SEX OFFENSE") %>%
+  count(District, sort = TRUE)
+
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(viridisLite)  # For better color representation
+
+crime_summary <- df %>%
+  count(District, Primary.Type) %>%
+  arrange(desc(n))  # Count occurrences and sort
+
+```
+
+
+```{r}
+ # Install if not already installed
+library(ggplot2)
+library(dplyr)
+install.packages("viridis")  # Install the viridis package
+library(viridis)             # Load the viridis package
+
+ # Use viridisLite for colors
+
+crime_summary <- df %>%
+  count(District, Primary.Type) %>%
+  arrange(desc(n))  # Count occurrences and sort
+ggplot(crime_summary, aes(x = Primary.Type, y = as.factor(District), fill = n)) +
+  geom_tile() +
+  scale_fill_viridis(option = "magma", direction = -1) +  # Use viridis
+  labs(title = "Crime Type Distribution Across Districts",
+       x = "Crime Type",
+       y = "District",
+       fill = "Crime Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+```{r}
+unique(df$Primary.Type)
+```
+
+```{r}
+library(dplyr)
+
+# Grouping crime types into 5 categories as per your request
+df <- df %>%
+  mutate(Crime_Category = case_when(
+    Primary.Type %in% c("ASSAULT", "CRIMINAL SEXUAL ASSAULT", "SEX OFFENSE") ~ "Assault & Sexual Offenses",
+    Primary.Type %in% c("ROBBERY", "THEFT") ~ "Robbery & Theft",
+    Primary.Type %in% c("INTIMIDATION", "OBSCENITY", "STALKING") ~ "Intimidation & Other",
+    Primary.Type %in% c("BATTERY", "HOMICIDE", "KIDNAPPING") ~ "Violent Crimes",
+    TRUE ~ "Other"  # Other categories can be left as "Other"
+  ))
+
+```
+
+```{r}
+crime_summary <- df %>%
+  count(Crime_Category, District) %>%
+  arrange(desc(n))  # Count occurrences and sort
+ggplot(crime_summary, aes(x = Crime_Category, y = as.factor(District), fill = n)) +
+  geom_tile() +
+  scale_fill_viridis(option = "magma", direction = -1) +  # Use viridis color palette
+  labs(title = "Crime Category Distribution Across Districts",
+       x = "Crime Category",
+       y = "District",
+       fill = "Crime Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+# Save the updated dataset with Crime_Category into a new CSV file
+write.csv(df, "updated_crime_data.csv", row.names = FALSE)
+
+```
+
+```{r}
+install.packages("shiny")
+library(shiny)
+get (wd)
+```
+
+
