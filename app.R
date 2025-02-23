@@ -8,80 +8,44 @@
 #
 
 library(shiny)
-library(bslib)
-library(DT)
-library(plotly)
-library(tidyverse)
-library(DataExplorer)
-library(leaflet)
-
-crime_data <- read.csv("cleaned_crime_data.csv")
-
-data_list <- list(
-    "Chicago Crime Data" = crime_data
-)
-
-# Ensure the dataset contains latitude & longitude
-if (!all(c("Latitude", "Longitude", "Primary.Type") %in% colnames(crime_data))) {
-    stop("Dataset must contain 'Latitude', 'Longitude', and 'Primary.Type' columns.")
-}
-
 
 # Define UI for application that draws a histogram
-# 1.0 USER INTERFACE ----
-ui <- navbarPage(
+ui <- fluidPage(
 
-    title = "Chicago Crime Explorer",
+    # Application title
+    titlePanel("Old Faithful Geyser Data"),
 
-    theme = bslib::bs_theme(version = 4, bootswatch = "minty"),
+    # Sidebar with a slider input for number of bins 
+    sidebarLayout(
+        sidebarPanel(
+            sliderInput("bins",
+                        "Number of bins:",
+                        min = 1,
+                        max = 50,
+                        value = 30)
+        ),
 
-    tabPanel(
-        title = "Explore",
-
-        sidebarLayout(
-
-            sidebarPanel(
-                width = 3,
-                h1("Explore Crime Data"),
-
-                selectInput(
-                    inputId = "crime_type",
-                    label   = "Select Crime Type:",
-                    choices = unique(crime_data$Primary.Type),
-                    selected = "ALL",
-                    multiple = TRUE
-                ),
-
-                sliderInput(
-                    inputId = "safe_radius",
-                    label   = "Safe Walking Distance (meters):",
-                    min = 100, max = 2000, value = 500, step = 100
-                ),
-
-                actionButton("update_map", "Update Map", class = "btn btn-primary"),
-
-                hr(),
-                h3("Chicago Crime Analysis"),
-                p("Explore crime patterns and trends using interactive tools.")
-            ),
-
-            mainPanel(
-                tabsetPanel(
-                    tabPanel("Crime Map", leafletOutput("crime_map", height = 700)),
-                    tabPanel("Data Table", DT::dataTableOutput("data_table"))
-                )
-            )
+        # Show a plot of the generated distribution
+        mainPanel(
+           plotOutput("distPlot")
         )
     )
 )
 
 # Define server logic required to draw a histogram
+server <- function(input, output) {
 
+    output$distPlot <- renderPlot({
+        # generate bins based on input$bins from ui.R
+        x    <- faithful[, 2]
+        bins <- seq(min(x), max(x), length.out = input$bins + 1)
 
+        # draw the histogram with the specified number of bins
+        hist(x, breaks = bins, col = 'darkgray', border = 'white',
+             xlab = 'Waiting time to next eruption (in mins)',
+             main = 'Histogram of waiting times')
+    })
+}
 
-
-# Run the application
-shinyApp(ui = ui, server = function(input, output) {})
-
-# shinyApp(ui = ui, server = server)
-
+# Run the application 
+shinyApp(ui = ui, server = server)
