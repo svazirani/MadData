@@ -1,0 +1,175 @@
+```{r}
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(readr)
+
+# Load your actual crime data
+crime_data <- read_csv("~/Downloads/crimechicago/updated_crime_data.csv")
+
+# Ensure dataset contains necessary columns
+if (!all(c("Latitude", "Longitude", "Primary.Type", "Crime_Category", "Date", "District") %in% colnames(crime_data))) {
+    stop("Dataset must contain 'Latitude', 'Longitude', 'Primary.Type', 'Crime_Category', 'Date', and 'District' columns.")
+}
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Chicago Crime Analysis"),
+
+  # Create Tabs
+  tabsetPanel(
+    
+    # Tab for Crime Map
+    tabPanel("Crime Map",
+      sidebarLayout(
+        sidebarPanel(
+          selectInput("crime_type", "Select Crime Type:",
+                      choices = c("ALL", unique(crime_data$Primary.Type)),
+                      selected = "ALL",
+                      multiple = TRUE),
+
+          radioButtons("map_type", "Map Type:",
+                       choices = c("Heatmap" = "heat", "Markers" = "markers"),
+                       selected = "markers"),
+
+          sliderInput("safe_radius", "Safe Walking Distance (meters):",
+                      min = 100, max = 2000, value = 500, step = 100),
+
+          actionButton("update_map", "Update Map", class = "btn btn-primary")
+        ),
+
+        mainPanel(
+          leafletOutput("crime_map", height = "700px")
+        )
+      )
+    ),
+    
+    # Tab for Crime Bar Charts
+    tabPanel("Crime Patterns",
+      sidebarPanel(
+        sliderInput("hour_range", "Select Hour Interval:", 
+                    min = 0, max = 23, value = c(0, 23), step = 1),
+        
+        selectInput("district", "Select District(s):", 
+                    choices = unique(crime_data$District), 
+                    selected = unique(crime_data$District), multiple = TRUE)
+      ),
+
+      mainPanel(
+        fluidRow(
+          column(6, plotOutput("violent_plot")),
+          column(6, plotOutput("assault_plot"))
+        ),
+        fluidRow(
+          column(6, plotOutput("robbery_plot")),
+          column(6, plotOutput("intimidation_plot"))
+        )
+      )
+    )
+  )
+)
+
+# Define Server
+server <- function(input, output, session) {
+
+  # Reactive function to filter data based on user input
+  filtered_data <- reactive({
+    req(crime_data)
+    
+    crime_data %>%
+      mutate(Hour = hour(as.POSIXct(Date))) %>%
+      filter((Primary.Type %in% input$crime_type | "ALL" %in% input$crime_type) &
+               Hour >= input$hour_range[1] & Hour <= input$hour_range[2] &
+               District %in% input$district)
+  })
+  
+  # Function to group data by hour for each crime category and ensure all districts are represented
+  get_crime_data <- function(crime_type) {
+    df <- filtered_data() %>%
+      filter(Crime_Category == crime_type) %>%
+      group_by(District, Hour) %>%
+      summarise(Count = n(), .groups = "drop")
+    
+    # Ensure all districts are represented
+    all_districts <- data.frame(District = rep(unique(crime_data$District), each = 24), Hour = rep(0:23, times = length(unique(crime_data$District))))
+    df <- merge(all_districts, df, by = c("District", "Hour"), all.x = TRUE)
+    df$Count[is.na(df$Count)] <- 0
+    return(df)
+  }
+
+  # Render crime type-based bar plots
+  output$violent_plot <- renderPlot({
+    ggplot(get_crime_data("Violent Crimes"), aes(x = Hour, y = Count, fill = as.factor(District))) +
+      geom_bar(stat = "identity") +
+      labs(title = "Violent Crimes by Hour", x = "Hour", y = "Count") +
+      theme_minimal() + theme(legend.position = "none")
+  })
+
+  output$assault_plot <- renderPlot({
+    ggplot(get_crime_data("Assault & Sexual Offenses"), aes(x = Hour, y = Count, fill = as.factor(District))) +
+      geom_bar(stat = "identity") +
+      labs(title = "Assault & Sexual Offenses by Hour", x = "Hour", y = "Count") +
+      theme_minimal() + theme(legend.position = "none")
+  })
+
+  output$robbery_plot <- renderPlot({
+    ggplot(get_crime_data("Robbery & Theft"), aes(x = Hour, y = Count, fill = as.factor(District))) +
+      geom_bar(stat = "identity") +
+      labs(title = "Robbery & Theft by Hour", x = "Hour", y = "Count") +
+      theme_minimal() + theme(legend.position = "none")
+  })
+
+  output$intimidation_plot <- renderPlot({
+    ggplot(get_crime_data("Intimidation & Other"), aes(x = Hour, y = Count, fill = as.factor(District))) +
+      geom_bar(stat = "identity") +
+      labs(title = "Intimidation & Other by Hour", x = "Hour", y = "Count") +
+      theme_minimal() + theme(legend.position = "none")
+  })
+
+  # Initial Map Setup
+  output$crime_map <- renderLeaflet({
+    leaflet() %>%
+      setView(lng = -87.6298, lat = 41.8781, zoom = 11) %>%  # Center on Chicago
+      addProviderTiles(providers$CartoDB.Positron)  # Light-themed basemap
+  })
+  
+  # Update Map Dynamically
+  observeEvent(input$update_map, {
+    data <- filtered_data()
+
+    leafletProxy("crime_map") %>%
+      clearMarkers() %>%
+      clearShapes() %>%
+      clearHeatmap() %>%
+      {
+        if (input$map_type == "markers") {
+          addCircleMarkers(
+            data = data,
+            lng = ~Longitude, lat = ~Latitude,
+            color = ~as.factor(Primary.Type),
+            radius = 4, stroke = FALSE, fillOpacity = 0.7,
+            popup = ~paste("<strong>Crime Type:</strong>", Primary.Type,
+                           "<br><strong>Location:</strong>", Location.Description)
+          )
+        } else {
+          addHeatmap(
+            data = data,
+            lng = ~Longitude, lat = ~Latitude,
+            intensity = 1, blur = 20, max = 0.05
+          )
+        }
+      } %>%
+      addCircles(
+        lng = -87.6298, lat = 41.8781, radius = input$safe_radius,
+        color = "blue", fillColor = "blue", fillOpacity = 0.2
+      )
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+
+```
+
